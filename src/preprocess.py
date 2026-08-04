@@ -100,13 +100,6 @@ def train_and_evaluate_avg(trainset, testloader, device, target_class, num_epoch
     print(f"  Mean: {mean:.3f} ± {std:.3f}")
     return mean, std
 
-def imshow(img):
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
-
-
 @dataclass
 class ExperimentConfig:
     target_class: int = 3
@@ -305,49 +298,3 @@ def main(argv=None) -> None:
 
 if __name__ == "__main__":
     main()
-
-# # get some random training images
-# dataiter = iter(trainloader)
-# images, labels = next(dataiter)
-
-# # show images
-# imshow(torchvision.utils.make_grid(images))
-# # print labels
-# print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
-
-# model_id = "google/ddpm-cifar10-32"
-
-# ddpm = DDPMPipeline.from_pretrained(model_id)  # you can replace DDPMPipeline with DDIMPipeline or PNDMPipeline for faster inference
-# ddpm.to(device)
-
-# scheduler = DDIMScheduler.from_pretrained(model_id)
-# scheduler.set_timesteps(num_inference_steps=40)
-
-# image = ddpm().images[0]
-# image.save("ddpm_generated_image.png")
-
-# x = torch.randn(4, 3, 32, 32).to(device)
-
-# for i, t in tqdm(enumerate(scheduler.timesteps)):
-
-#     model_input = scheduler.scale_model_input(x, t)
-#     with torch.no_grad():
-#         noise_pred = ddpm.unet(model_input, t)["sample"]
-
-#     scheduler_output = scheduler.step(noise_pred, t, x)
-#     x = scheduler_output.prev_sample
-
-    # if i % 10 == 0 or i == len(scheduler.timesteps) - 1:
-    #     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-
-    #     grid = torchvision.utils.make_grid(x, nrow=4).permute(1, 2, 0)
-    #     axs[0].imshow(grid.cpu().clip(-1, 1) * 0.5 + 0.5)
-    #     axs[0].set_title(f"Current x (step {i})")
-
-    #     pred_x0 = (
-    #         scheduler_output.pred_original_sample
-    #     )
-    #     grid = torchvision.utils.make_grid(pred_x0, nrow=4).permute(1, 2, 0)
-    #     axs[1].imshow(grid.cpu().clip(-1, 1) * 0.5 + 0.5)
-    #     axs[1].set_title(f"Predicted denoised images (step {i})")
-    #     plt.show()
