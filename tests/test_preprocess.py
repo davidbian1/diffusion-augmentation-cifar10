@@ -1,6 +1,8 @@
+import random
+
 import torch
 
-from src.preprocess import create_imbalanced_dataset, SyntheticDataset
+from src.preprocess import create_imbalanced_dataset, SyntheticDataset, set_seed
 
 
 class DummyDataset:
@@ -46,6 +48,31 @@ def test_create_imbalanced_dataset_keep_fraction_one_keeps_everything():
     imbalanced = create_imbalanced_dataset(dataset, target_class=3, keep_fraction=1.0)
 
     assert len(imbalanced) == len(dataset)
+
+
+def test_set_seed_makes_random_and_torch_draws_reproducible():
+    set_seed(123)
+    random_draw_a = random.random()
+    torch_draw_a = torch.rand(3)
+
+    set_seed(123)
+    random_draw_b = random.random()
+    torch_draw_b = torch.rand(3)
+
+    assert random_draw_a == random_draw_b
+    assert torch.equal(torch_draw_a, torch_draw_b)
+
+
+def test_create_imbalanced_dataset_is_reproducible_with_same_seed():
+    labels = [3] * 100 + [0] * 50
+    dataset = DummyDataset(labels)
+
+    set_seed(7)
+    first = create_imbalanced_dataset(dataset, target_class=3, keep_fraction=0.2)
+    set_seed(7)
+    second = create_imbalanced_dataset(dataset, target_class=3, keep_fraction=0.2)
+
+    assert first.indices == second.indices
 
 
 def test_synthetic_dataset_applies_transform_and_returns_fixed_label():

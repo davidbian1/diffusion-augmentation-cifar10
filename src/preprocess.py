@@ -16,6 +16,13 @@ from torchvision.transforms import v2
 
 from src.generate import load_pipeline, generate_images, create_image_grid
 
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
 def create_imbalanced_dataset(dataset, target_class, keep_fraction):
 
     target_indices = [i for i, (_, label) in enumerate(dataset) if label == target_class]
@@ -70,9 +77,10 @@ def train_and_evaluate(trainset, testloader, device, target_class, num_epochs=5)
             total += mask.sum().item()
     return correct / total if total > 0 else 0
 
-def train_and_evaluate_avg(trainset, testloader, device, target_class, num_epochs=5, num_runs=3):
+def train_and_evaluate_avg(trainset, testloader, device, target_class, num_epochs=5, num_runs=3, seed=42):
     accuracies = []
     for run in range(num_runs):
+        set_seed(seed + run)
         print(f"  Run {run+1}/{num_runs}...")
         acc = train_and_evaluate(trainset, testloader, device, target_class, num_epochs)
         accuracies.append(acc)
@@ -89,6 +97,9 @@ def imshow(img):
 
 
 if __name__ == "__main__":
+
+    SEED = 42
+    set_seed(SEED)
 
     target_class = 3 # cat
     first_fraction = 0.1  # Starting fraction of cat images
@@ -137,14 +148,14 @@ if __name__ == "__main__":
     all_cached_files = sorted(glob.glob(os.path.join(save_dir, "*.png")))
 
     print("Training upper bound (full balanced data)...")
-    upper_bound_acc, upper_bound_std = train_and_evaluate_avg(trainset, testloader, device, target_class, 5)
+    upper_bound_acc, upper_bound_std = train_and_evaluate_avg(trainset, testloader, device, target_class, 5, seed=SEED)
     results[-1] = (upper_bound_acc, upper_bound_std)
     print(f"Upper bound cat accuracy (full data): {upper_bound_acc:.3f}")
 
     # sys.exit()
 
     print("Training baseline (no synthetic data)...")
-    baseline_acc, baseline_std = train_and_evaluate_avg(imbalanced_trainset, testloader, device, target_class, 5)
+    baseline_acc, baseline_std = train_and_evaluate_avg(imbalanced_trainset, testloader, device, target_class, 5, seed=SEED)
     results[0.0] = (baseline_acc, baseline_std)
     print(f"Baseline cat accuracy: {baseline_acc:.3f}")
 
@@ -168,7 +179,7 @@ if __name__ == "__main__":
         combined = ConcatDataset([imbalanced_trainset, synthetic_dataset])
 
         print(f"Training classifier with {len(all_synthetic_images)} synthetic images...")
-        acc, std = train_and_evaluate_avg(combined, testloader, device, target_class)
+        acc, std = train_and_evaluate_avg(combined, testloader, device, target_class, seed=SEED)
         results[target_fraction] = (acc, std)
         print(f"Cat accuracy at fraction {target_fraction}: {acc:.3f}")
 
