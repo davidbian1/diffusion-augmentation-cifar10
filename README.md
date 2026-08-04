@@ -41,6 +41,22 @@ Synthetic augmentation consistently improved minority-class accuracy over the im
 - ResNet18 (pretrained, fine-tuned)
 - CIFAR-10
 
+## Project Structure
+
+```
+.
+├── src/
+│   ├── generate.py            # class-conditional DDPM sampling pipeline
+│   ├── preprocess.py          # imbalance construction, training loop, experiment entry point
+│   └── check_environment.py   # CUDA/torch environment sanity check
+├── tests/
+│   └── test_preprocess.py     # unit tests for the data preprocessing logic
+├── Dockerfile
+├── generate.slurm             # SLURM job script for cluster runs
+├── requirements.txt
+└── results.png
+```
+
 ## How to Run
 
 ```bash
@@ -49,11 +65,40 @@ pip install -r requirements.txt
 # Generate synthetic images and run full experiment
 python -m src.preprocess
 
-# Generated images are cached to disk after first run for faster re-runs
+# Generated images are cached to generated_images/ after first run for faster re-runs
 ```
+
+Docker:
+
+```bash
+docker build -t diffusion-augmentation .
+docker run --gpus all diffusion-augmentation
+```
+
+## Testing
+
+```bash
+pip install pytest
+pytest
+```
+
+Unit tests cover the data preprocessing primitives (imbalance construction and
+synthetic dataset wrapping). Training and generation are not covered by tests
+since they require a GPU and network access to pull the pretrained checkpoint.
 
 ## Limitations
 
 - Single minority class tested (cat); results may vary across other classes
 - Unconditional → conditional pipeline adds filtering overhead; a natively conditional model at higher resolution could improve results
 - Fixed learning rate (0.0001) across all conditions; scheduling may improve absolute accuracy
+
+## Contributing
+
+This is a small research/portfolio project, but issues and pull requests are
+welcome — e.g. testing additional minority classes, adding a learning rate
+schedule, or extending test coverage to the training loop with a mocked model.
+Please open an issue to discuss non-trivial changes before submitting a PR.
+
+## License
+
+Released under the [MIT License](LICENSE).
