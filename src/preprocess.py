@@ -1,9 +1,12 @@
 import argparse
 import glob
+import json
 import os
 import random
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -50,7 +53,7 @@ class SyntheticDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.transform(self.images[idx]), self.label
 
-def train_and_evaluate(trainset, testloader, device, target_class, num_epochs=5, lr=1e-4, train_batch_size=64):
+def train_and_evaluate(trainset, testloader, device, target_class, num_epochs=5, lr=1e-4, train_batch_size=64, checkpoint_path=None):
     model = models.resnet18(weights='IMAGENET1K_V1')
     model.fc = nn.Linear(model.fc.in_features, 10)
     model = model.to(device)
@@ -77,14 +80,20 @@ def train_and_evaluate(trainset, testloader, device, target_class, num_epochs=5,
             mask = labels == target_class
             correct += (preds[mask] == labels[mask]).sum().item()
             total += mask.sum().item()
+
+    if checkpoint_path is not None:
+        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(model.state_dict(), checkpoint_path)
+
     return correct / total if total > 0 else 0
 
-def train_and_evaluate_avg(trainset, testloader, device, target_class, num_epochs=5, num_runs=3, lr=1e-4, train_batch_size=64, seed=42):
+def train_and_evaluate_avg(trainset, testloader, device, target_class, num_epochs=5, num_runs=3, lr=1e-4, train_batch_size=64, seed=42, checkpoint_dir=None, run_label="run"):
     accuracies = []
     for run in range(num_runs):
         set_seed(seed + run)
         print(f"  Run {run+1}/{num_runs}...")
-        acc = train_and_evaluate(trainset, testloader, device, target_class, num_epochs, lr=lr, train_batch_size=train_batch_size)
+        checkpoint_path = os.path.join(checkpoint_dir, f"{run_label}_run{run+1}.pt") if checkpoint_dir else None
+        acc = train_and_evaluate(trainset, testloader, device, target_class, num_epochs, lr=lr, train_batch_size=train_batch_size, checkpoint_path=checkpoint_path)
         accuracies.append(acc)
     mean = sum(accuracies) / len(accuracies)
     std = statistics.stdev(accuracies)
@@ -112,6 +121,8 @@ class ExperimentConfig:
     num_runs: int = 3
     lr: float = 1e-4
     seed: int = 42
+    output_dir: str = "results"
+    save_checkpoints: bool = False
 
 
 def parse_args(argv=None) -> ExperimentConfig:
@@ -130,6 +141,8 @@ def parse_args(argv=None) -> ExperimentConfig:
     parser.add_argument("--num-runs", type=int, default=3, help="Independent runs averaged per condition")
     parser.add_argument("--lr", type=float, default=1e-4, help="Adam learning rate")
     parser.add_argument("--seed", type=int, default=42, help="Base random seed")
+    parser.add_argument("--output-dir", type=str, default="results", help="Directory to save each run's config/metrics/plot artifacts")
+    parser.add_argument("--save-checkpoints", action="store_true", help="Save trained model weights for every run under checkpoints/")
     args = parser.parse_args(argv)
     return ExperimentConfig(
         target_class=args.target_class,
@@ -144,6 +157,8 @@ def parse_args(argv=None) -> ExperimentConfig:
         num_runs=args.num_runs,
         lr=args.lr,
         seed=args.seed,
+        output_dir=args.output_dir,
+        save_checkpoints=args.save_checkpoints,
     )
 
 
@@ -186,12 +201,15 @@ def run_experiment(config: ExperimentConfig, device) -> dict:
     cached_files, pipeline = load_or_prepare_synthetic_source(config, device)
     skip_generation = pipeline is None
 
+    checkpoint_dir = "checkpoints" if config.save_checkpoints else None
+
     results = {}
 
     print("Training upper bound (full balanced data)...")
     upper_bound_acc, upper_bound_std = train_and_evaluate_avg(
         trainset, testloader, device, config.target_class, config.num_epochs,
         num_runs=config.num_runs, lr=config.lr, train_batch_size=config.train_batch_size, seed=config.seed,
+        checkpoint_dir=checkpoint_dir, run_label="upper_bound",
     )
     results[-1] = (upper_bound_acc, upper_bound_std)
     print(f"Upper bound cat accuracy (full data): {upper_bound_acc:.3f}")
@@ -200,6 +218,7 @@ def run_experiment(config: ExperimentConfig, device) -> dict:
     baseline_acc, baseline_std = train_and_evaluate_avg(
         imbalanced_trainset, testloader, device, config.target_class, config.num_epochs,
         num_runs=config.num_runs, lr=config.lr, train_batch_size=config.train_batch_size, seed=config.seed,
+        checkpoint_dir=checkpoint_dir, run_label="baseline",
     )
     results[0.0] = (baseline_acc, baseline_std)
     print(f"Baseline cat accuracy: {baseline_acc:.3f}")
@@ -228,6 +247,7 @@ def run_experiment(config: ExperimentConfig, device) -> dict:
         acc, std = train_and_evaluate_avg(
             combined, testloader, device, config.target_class,
             num_runs=config.num_runs, lr=config.lr, train_batch_size=config.train_batch_size, seed=config.seed,
+            checkpoint_dir=checkpoint_dir, run_label=f"fraction_{target_fraction}",
         )
         results[target_fraction] = (acc, std)
         print(f"Cat accuracy at fraction {target_fraction}: {acc:.3f}")
@@ -252,11 +272,35 @@ def plot_results(results: dict, output_path: str = "results.png") -> None:
     plt.savefig(output_path)
 
 
+def save_run_artifacts(config: ExperimentConfig, results: dict) -> Path:
+    """Persist this run's config and metrics to a timestamped directory under
+    config.output_dir, and refresh the top-level results.png used by the README."""
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_dir = Path(config.output_dir) / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(run_dir / "config.json", "w") as f:
+        json.dump(asdict(config), f, indent=2)
+
+    serializable_results = {
+        str(fraction): {"mean": mean, "std": std}
+        for fraction, (mean, std) in results.items()
+    }
+    with open(run_dir / "metrics.json", "w") as f:
+        json.dump(serializable_results, f, indent=2)
+
+    plot_results(results, str(run_dir / "results.png"))
+    plot_results(results, "results.png")
+
+    return run_dir
+
+
 def main(argv=None) -> None:
     config = parse_args(argv)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     results = run_experiment(config, device)
-    plot_results(results)
+    run_dir = save_run_artifacts(config, results)
+    print(f"Saved run config, metrics, and plot to {run_dir}")
 
 
 if __name__ == "__main__":
