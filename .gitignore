@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Generated image outputs (keep documentation assets like results.png)
+*.png
+!results.png
+
+# Generated/cached data
+data/
+generated_images/
+*.cache/
+.cache/
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+checkpoints/
+
+# Experiment tracking
+wandb/
+
+# Logs
+logs/
+*.log
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
