@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 import torch.nn.functional as F
 import random
 from diffusers import DDPMPipeline, DDIMPipeline, PNDMPipeline
-from generate import load_pipeline, generate_images, create_image_grid
+from src.generate import load_pipeline, generate_images, create_image_grid
 import os
 import torchvision.models as models
 from torchvision.transforms import v2

@@ -8,4 +8,4 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-CMD ["python", "preprocess.py"]
+CMD ["python", "-m", "src.preprocess"]

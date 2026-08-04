@@ -47,7 +47,7 @@ Synthetic augmentation consistently improved minority-class accuracy over the im
 pip install -r requirements.txt
 
 # Generate synthetic images and run full experiment
-python preprocess.py
+python -m src.preprocess
 
 # Generated images are cached to disk after first run for faster re-runs
 ```
