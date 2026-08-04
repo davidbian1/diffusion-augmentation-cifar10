@@ -2,8 +2,6 @@ torch==2.5.1
 torchvision==0.20.1
 diffusers==0.38.0
 huggingface_hub==1.21.0
-datasets==2.16.1
 numpy==1.26.4
 matplotlib==3.10.9
 pillow==12.2.0
-tqdm==4.68.3
